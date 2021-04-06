@@ -36,9 +36,9 @@ echo "creating plist"
 	<key>StartInterval</key>
 	<integer>$6</integer>
 	<key>StandardOutPath</key>
-	<string>/tmp/cruise_update_daemon.log</string>
+	<string>/tmp/$DaemonName.log</string>
 	<key>StandardErrorPath</key>
-	<string>/tmp/cruise_update_daemon.err</string>
+	<string>/tmp/$DaemonName.err</string>
 </dict>
 </plist>
 LOG_LAUNCHDAEMON
