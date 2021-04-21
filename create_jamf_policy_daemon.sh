@@ -4,6 +4,15 @@
 # unload the LaunchDaemon and remove the LaunchDaemon and script files
 
 DaemonName=$4
+PolicyTrigger=$5
+StartIntervalDay1=$6
+StartIntervalDay2=$7
+
+# Uncomment for testing
+# DaemonName="com.company.update"
+# PolicyTrigger="install_mac_updates"
+# StartIntervalDay1="1"
+# StartIntervalDay2="15"
 
 echo "checking for old daemon versions"
 if [[ -f "/Library/LaunchDaemons/$DaemonName.plist" ]]; then
@@ -31,10 +40,29 @@ echo "creating plist"
 			<string>/usr/local/bin/jamf</string>
 			<string>policy</string>
 			<string>-event</string>
-			<string>$5</string>
+			<string>$PolicyTrigger</string>
 	</array>
-	<key>StartInterval</key>
-	<integer>$6</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Day</key>
+			<integer>$StartIntervalDay1</integer>
+			<key>Hour</key>
+			<integer>12</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+		<dict>
+			<key>Day</key>
+			<integer>$StartIntervalDay2</integer>
+			<key>Hour</key>
+			<integer>12</integer>
+			<key>Minute</key>
+			<integer>0</integer>
+		</dict>
+	</array>
 	<key>StandardOutPath</key>
 	<string>/tmp/$DaemonName.log</string>
 	<key>StandardErrorPath</key>
