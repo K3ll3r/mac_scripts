@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# Edit these variables for your environment
-DaemonName="jamf_policy_test"
-CompanyName="company"
+# Custom Variables
+# Set process to "daemon" or "agent"
+process="daemon"
+projectName="jamf_policy_test"
+companyName="company"
 AppList=(
     "install_Google Chrome"
     "install_Slack"
@@ -10,21 +12,38 @@ AppList=(
     )
 SlackWebhookURL=""
 
+# Other Variables
+loggedInUser=$( scutil <<< "show State:/Users/ConsoleUser" | awk '/Name :/ && ! /loginwindow/ { print $3 }' )
+loggedInUID=$(id -u "$loggedInUser")
+logFolder="/Users/${loggedInUser}/Library/Logs/${companyName}"
+scriptPath="/Library/Scripts/${companyName}"
+[[ ! -d "$scriptPath" ]] && mkdir -p "$scriptPath"
+[[ ! -d "$logFolder" ]] && mkdir -p "$logFolder"
+
+processName="com.$companyName.$projectName"
+processFullPath="$processPath/$processName.plist"
+scriptPath="/Library/Scripts/${companyName}"
+mkdir -p "$scriptPath"
+
 # If any previous instances of the  LaunchDaemon and script exist,
 # unload the LaunchDaemon and remove the LaunchDaemon and script files
-
-echo "checking for old daemon versions"
-if [[ -f "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist" ]]; then
-   echo "unloading old daemon"
-   /bin/launchctl unload "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist"
-   echo "deleting old daemon"
-   /bin/rm "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist"
+echo "checking for old $process versions"
+if [[ -f "$processFullPath" ]]; then
+  if [[ $process == "daemon" ]]; then
+  echo "Unloading $process"
+  /bin/launchctl bootout system "$processFullPath"
+  elif [[ $process == "agent" ]]; then
+  echo "Unloading $process"
+  /bin/launchctl bootout gui/$loggedInUID "$processFullPath"
+  fi
+  echo "deleting old $process"
+  /bin/rm "$processFullPath"
 fi
 
 echo "checking for old script versions"
-if [[ -f "/Library/Application Support/JAMF/bin/$DaemonName.sh" ]]; then
+if [[ -f "$scriptPath/$projectName.sh" ]]; then
    echo "removing old script"
-   /bin/rm "/Library/Application Support/JAMF/bin/$DaemonName.sh"
+   /bin/rm "$scriptPath/$projectName.sh"
 fi
 
 # Create the LaunchDaemon by using cat input redirection
@@ -33,17 +52,17 @@ fi
 # The LaunchDaemon will run at load and at an interval specified in the parameters
 
 echo "creating plist"
-/bin/cat > "/tmp/com.$CompanyName.$DaemonName.plist" << LOG_LAUNCHDAEMON
+/bin/cat > "/tmp/com.$companyName.$projectName.plist" << LOG_LAUNCHDAEMON
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.$CompanyName.$DaemonName</string>
+	<string>com.$companyName.$projectName</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>sh</string>
-		<string>/Library/Application Support/JAMF/bin/$DaemonName.sh</string>
+		<string>/Library/Application Support/JAMF/bin/$projectName.sh</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
@@ -58,12 +77,12 @@ echo "creating plist"
 </plist>
 LOG_LAUNCHDAEMON
 
-# Create the $DaemonName script by using cat input redirection
+# Create the $projectName script by using cat input redirection
 # to write the shell script contained below to a new file.
 #
 # The script will write the repos to a log file
 echo "creating script"
-/bin/cat > "/tmp/$DaemonName.sh" << LOG_SCRIPT
+/bin/cat > "/tmp/$projectName.sh" << LOG_SCRIPT
 #!/bin/bash
 
 
@@ -99,29 +118,35 @@ done
 LOG_SCRIPT
 
 # After creation, fix permissions (owned by root:wheel and not executable)
-# and move into /Library/LaunchDaemons.
+# and move into $AgentPath.
 
 echo "fixing plist permissions and ownership"
-/usr/sbin/chown root:wheel "/tmp/com.$CompanyName.$DaemonName.plist"
-/bin/chmod 755 "/tmp/com.$CompanyName.$DaemonName.plist"
-/bin/chmod a-x "/tmp/com.$CompanyName.$DaemonName.plist"
-/bin/mv "/tmp/com.$CompanyName.$DaemonName.plist" "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist"
+/usr/sbin/chown root:wheel "/tmp/$processName.plist"
+/bin/chmod 755 "/tmp/$processName.plist"
+/bin/chmod a-x "/tmp/$processName.plist"
+/bin/mv "/tmp/$processName.plist" "$processFullPath"
 
 # After creation, fix permissions (owned by root:wheel and executable)
-# and move into /Library/LaunchDaemons.
+# and move into $AgentPath.
 
 echo "fixing script permissions and ownership"
-/usr/sbin/chown root:wheel "/tmp/$DaemonName.sh"
-/bin/chmod 755 "/tmp/$DaemonName.sh"
-/bin/chmod a+x "/tmp/$DaemonName.sh"
-/bin/mv "/tmp/$DaemonName.sh" "/Library/Application Support/JAMF/bin/$DaemonName.sh"
+/usr/sbin/chown root:wheel "/tmp/$projectName.sh"
+/bin/chmod 755 "/tmp/$projectName.sh"
+/bin/chmod a+x "/tmp/$projectName.sh"
+/bin/mv "/tmp/$projectName.sh" "$scriptPath/$projectName.sh"
 
-# After the LaunchDaemon and script are in place with proper permissions,
-# load the LaunchDaemon to begin the script's execution.
+# After the LaunchAgent and script are in place with proper permissions,
+# load the LaunchAgent to begin the script's execution.
 
-echo "loading daemon"
-if [[ -f "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist" ]]; then
-   /bin/launchctl load -w "/Library/LaunchDaemons/com.$CompanyName.$DaemonName.plist"
+echo "loading $process"
+if [[ -f "$processFullPath" ]]; then
+  if [[ $process == "daemon" ]]; then
+  /bin/launchctl bootstrap system "$processFullPath"
+  elif [[ $process == "agent" ]]; then
+  /bin/launchctl bootstrap gui/$loggedInUID "$processFullPath"
+  fi
+else
+echo "$process not found"
 fi
 
 exit 0
